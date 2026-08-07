@@ -1,15 +1,30 @@
 import { Controller, Get, Post, Patch, Body, Param, UseGuards } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 import { PrismaService } from '@app/database';
 import { CasbinGuard } from '@app/casbin';
 import { CurrentUser, ApiResponseDto } from '@app/common';
 import { LeaveType, LeaveStatus } from '@prisma/client';
 
+@ApiTags('4. Pengajuan Cuti & WFH')
+@ApiBearerAuth()
 @Controller('api/v1/leave-requests')
 @UseGuards(CasbinGuard)
 export class LeaveServiceController {
   constructor(private readonly prisma: PrismaService) {}
 
   @Post()
+  @ApiOperation({ summary: 'Membuat pengajuan Cuti / Sakit / Tukar WFH baru' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        type: { type: 'string', enum: ['CUTI', 'SAKIT', 'TUKAR_HARI_WFH', 'LEMBUR'], example: 'CUTI' },
+        startDate: { type: 'string', example: '2026-08-10' },
+        endDate: { type: 'string', example: '2026-08-12' },
+        reason: { type: 'string', example: 'Acara keluarga di luar kota' },
+      },
+    },
+  })
   async createLeaveRequest(
     @CurrentUser('sub') userId: string,
     @Body()
@@ -35,6 +50,7 @@ export class LeaveServiceController {
   }
 
   @Get('my-requests')
+  @ApiOperation({ summary: 'Mendapatkan daftar pengajuan cuti milik user yang login' })
   async getMyLeaveRequests(@CurrentUser('sub') userId: string) {
     const requests = await this.prisma.leaveRequest.findMany({
       where: { employeeId: userId },
@@ -44,6 +60,7 @@ export class LeaveServiceController {
   }
 
   @Get()
+  @ApiOperation({ summary: 'Mendapatkan semua pengajuan cuti seluruh karyawan (Untuk HRD Approval)' })
   async getAllLeaveRequests() {
     const requests = await this.prisma.leaveRequest.findMany({
       include: { employee: { include: { department: true } } },
@@ -53,6 +70,7 @@ export class LeaveServiceController {
   }
 
   @Patch(':id/status')
+  @ApiOperation({ summary: 'Menyetujui atau menolak pengajuan cuti (Approval HRD)' })
   async updateStatus(
     @Param('id') id: string,
     @Body() body: { status: LeaveStatus; hrdNotes?: string },

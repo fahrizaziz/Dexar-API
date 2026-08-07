@@ -1,10 +1,11 @@
 datasource db {
-  provider = "postgresql"
+  provider = "mysql"
   url      = env("DATABASE_URL")
 }
 
 generator client {
   provider = "prisma-client-js"
+  binaryTargets = ["native", "linux-arm64-openssl-3.0.x", "linux-musl-arm64-openssl-3.0.x"]
 }
 
 enum Role {
@@ -60,7 +61,7 @@ model User {
   role                    Role               @default(KARYAWAN)
   status                  String             @default("AKTIF")
   joinDate                DateTime           @default(now())
-  avatarUrl               String?
+  avatarUrl               String?            @db.Text
   wfhAllowanceDaysPerWeek Int                @default(3)
   createdAt               DateTime           @default(now())
   updatedAt               DateTime           @updatedAt
@@ -76,7 +77,7 @@ model Department {
   code              String     @unique
   name              String
   headOfDepartment  String?
-  description       String?
+  description       String?    @db.Text
   status            String     @default("AKTIF")
   createdAt         DateTime   @default(now())
   updatedAt         DateTime   @updatedAt
@@ -108,15 +109,15 @@ model AttendanceRecord {
   date               String             // YYYY-MM-DD
   clockInTime        String             // HH:mm:ss
   clockOutTime       String?            // HH:mm:ss
-  photoProofUrl      String
+  photoProofUrl      String             @db.Text
   latitude           Float
   longitude          Float
-  address            String
-  workPlan           String
-  workSummary        String?
+  address            String             @db.Text
+  workPlan           String             @db.Text
+  workSummary        String?            @db.Text
   status             AttendanceStatus   @default(ON_TIME)
   verificationStatus VerificationStatus @default(MENUNGGU)
-  notes              String?
+  notes              String?            @db.Text
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
 
@@ -130,9 +131,9 @@ model LeaveRequest {
   type        LeaveType
   startDate   DateTime
   endDate     DateTime
-  reason      String
+  reason      String      @db.Text
   status      LeaveStatus @default(PENDING)
-  hrdNotes    String?
+  hrdNotes    String?     @db.Text
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 
@@ -187,7 +188,7 @@ model AuditLog {
   actorRole Role
   action    String
   category  AuditCategory
-  details   String
+  details   String        @db.Text
   timestamp DateTime      @default(now())
 
   @@map("audit_logs")
