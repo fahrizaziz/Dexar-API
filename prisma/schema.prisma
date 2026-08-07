@@ -1,0 +1,208 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  KARYAWAN
+  HRD_ADMIN
+}
+
+enum AttendanceStatus {
+  ON_TIME
+  LATE
+  EARLY_LEAVE
+  WORK_COMPLETED
+}
+
+enum VerificationStatus {
+  TERVERIFIKASI
+  PERLU_REVISI
+  MENUNGGU
+}
+
+enum LeaveType {
+  CUTI
+  SAKIT
+  TUKAR_HARI_WFH
+  LEMBUR
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum AuditCategory {
+  KARYAWAN
+  ATTENDANCE
+  LEAVE
+  SYSTEM
+  ACCESS_RIGHTS
+}
+
+model User {
+  id                      String             @id @default(uuid())
+  nip                     String             @unique
+  fullName                String
+  email                   String             @unique
+  password                String
+  phone                   String?
+  departmentId            String?
+  department              Department?        @relation(fields: [departmentId], references: [id])
+  positionId              String?
+  position                Position?          @relation(fields: [positionId], references: [id])
+  role                    Role               @default(KARYAWAN)
+  status                  String             @default("AKTIF")
+  joinDate                DateTime           @default(now())
+  avatarUrl               String?
+  wfhAllowanceDaysPerWeek Int                @default(3)
+  createdAt               DateTime           @default(now())
+  updatedAt               DateTime           @updatedAt
+  attendances             AttendanceRecord[]
+  leaveRequests           LeaveRequest[]
+  auditLogs               AuditLog[]
+
+  @@map("users")
+}
+
+model Department {
+  id                String     @id @default(uuid())
+  code              String     @unique
+  name              String
+  headOfDepartment  String?
+  description       String?
+  status            String     @default("AKTIF")
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+  users             User[]
+  positions         Position[]
+
+  @@map("departments")
+}
+
+model Position {
+  id             String     @id @default(uuid())
+  code           String     @unique
+  name           String
+  departmentId   String
+  department     Department @relation(fields: [departmentId], references: [id])
+  level          String     @default("Staff")
+  status         String     @default("AKTIF")
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  users          User[]
+
+  @@map("positions")
+}
+
+model AttendanceRecord {
+  id                 String             @id @default(uuid())
+  employeeId         String
+  employee           User               @relation(fields: [employeeId], references: [id])
+  date               String             // YYYY-MM-DD
+  clockInTime        String             // HH:mm:ss
+  clockOutTime       String?            // HH:mm:ss
+  photoProofUrl      String
+  latitude           Float
+  longitude          Float
+  address            String
+  workPlan           String
+  workSummary        String?
+  status             AttendanceStatus   @default(ON_TIME)
+  verificationStatus VerificationStatus @default(MENUNGGU)
+  notes              String?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  @@map("attendance_records")
+}
+
+model LeaveRequest {
+  id          String      @id @default(uuid())
+  employeeId  String
+  employee    User        @relation(fields: [employeeId], references: [id])
+  type        LeaveType
+  startDate   DateTime
+  endDate     DateTime
+  reason      String
+  status      LeaveStatus @default(PENDING)
+  hrdNotes    String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@map("leave_requests")
+}
+
+model GeofenceConfig {
+  id                   String   @id @default(uuid())
+  officeName           String
+  latitude             Float
+  longitude            Float
+  radiusMeters         Int      @default(100)
+  workStartTime        String   @default("08:30")
+  workEndTime          String   @default("17:30")
+  lateToleranceMinutes Int      @default(15)
+  updatedAt            DateTime @updatedAt
+
+  @@map("geofence_configs")
+}
+
+model WorkShift {
+  id             String   @id @default(uuid())
+  code           String   @unique
+  name           String
+  startTime      String
+  endTime        String
+  breakStartTime String
+  breakEndTime   String
+  isDefault      Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  @@map("work_shifts")
+}
+
+model HolidayCalendar {
+  id         String   @id @default(uuid())
+  date       String   @unique // YYYY-MM-DD
+  title      String
+  type       String   @default("NATIONAL") // NATIONAL | CUTI_BERSAMA | COMPANY_EVENT
+  isCutQuota Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@map("holiday_calendars")
+}
+
+model AuditLog {
+  id        String        @id @default(uuid())
+  actorId   String?
+  actor     User?         @relation(fields: [actorId], references: [id])
+  actorNip  String
+  actorName String
+  actorRole Role
+  action    String
+  category  AuditCategory
+  details   String
+  timestamp DateTime      @default(now())
+
+  @@map("audit_logs")
+}
+
+// Casbin Rule Persistence Table
+model CasbinRule {
+  id    Int     @id @default(autoincrement())
+  ptype String
+  v0    String?
+  v1    String?
+  v2    String?
+  v3    String?
+  v4    String?
+  v5    String?
+
+  @@map("casbin_rules")
+}
