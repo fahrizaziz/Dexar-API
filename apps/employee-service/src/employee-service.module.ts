@@ -1,6 +1,10 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { EmployeeServiceController } from './employee-service.controller';
+import {
+  EmployeeServiceController,
+  DepartmentServiceController,
+  PositionServiceController,
+} from './employee-service.controller';
 import { DatabaseModule } from '@app/database';
 import { CasbinModule } from '@app/casbin';
 
@@ -10,6 +14,10 @@ import { CasbinModule } from '@app/casbin';
     DatabaseModule,
     CasbinModule,
   ],
-  controllers: [EmployeeServiceController],
+  controllers: [
+    EmployeeServiceController,
+    DepartmentServiceController,
+    PositionServiceController,
+  ],
 })
 export class EmployeeServiceModule {}
