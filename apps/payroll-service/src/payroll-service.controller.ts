@@ -22,7 +22,7 @@ export class PayrollServiceController {
         attendances: true,
         leaveRequests: true,
       },
-      orderBy: { fullName: 'asc' },
+      orderBy: { nip: 'asc' },
     });
 
     const summary = employees.map((emp) => {
@@ -35,7 +35,7 @@ export class PayrollServiceController {
       const wfhIncentivePerDay = 50000;
       const lateDeductionPerOccurrence = 25000;
       
-      const wfhIncentiveTotal = Math.min(totalHadir, wfhDaysCompleted) * wfhIncentivePerDay;
+      const wfhIncentiveTotal = totalHadir * wfhIncentivePerDay;
       const lateDeductionTotal = totalTerlambat * lateDeductionPerOccurrence;
       const netSalary = baseSalary + wfhIncentiveTotal - lateDeductionTotal;
 
@@ -46,11 +46,11 @@ export class PayrollServiceController {
         email: emp.email,
         department: emp.department?.name || 'Engineering & Tech',
         position: emp.position?.name || 'Software Engineer',
-        totalHadir: totalHadir || 20,
-        totalTerlambat: totalTerlambat || 1,
-        totalHoursWorked: totalHoursWorked || 160,
-        wfhAllowanceEligibleDays: emp.wfhAllowanceDaysPerWeek * 4,
-        wfhDaysCompleted: wfhDaysCompleted || 12,
+        totalHadir: totalHadir,
+        totalTerlambat: totalTerlambat,
+        totalHoursWorked: totalHoursWorked,
+        wfhAllowanceEligibleDays: (emp.wfhAllowanceDaysPerWeek || 3) * 4,
+        wfhDaysCompleted: wfhDaysCompleted,
         baseSalary,
         wfhIncentiveTotal,
         lateDeductionTotal,
@@ -64,7 +64,7 @@ export class PayrollServiceController {
   }
 
   @Get('slips/:employeeId')
-  @ApiOperation({ summary: 'Mendapatkan Rincian Slip Gaji Karyawan Spesiﬁk' })
+  @ApiOperation({ summary: 'Mendapatkan Rincian Slip Gaji Karyawan Spesifik' })
   async getEmployeeSalarySlip(@Param('employeeId') employeeId: string, @Query('month') month?: string) {
     const emp = await this.prisma.user.findUnique({
       where: { id: employeeId },
@@ -75,8 +75,8 @@ export class PayrollServiceController {
       throw new BadRequestException('Karyawan tidak ditemukan');
     }
 
-    const totalHadir = emp.attendances.length || 20;
-    const totalTerlambat = emp.attendances.filter((a) => a.status === 'LATE').length || 1;
+    const totalHadir = emp.attendances.length;
+    const totalTerlambat = emp.attendances.filter((a) => a.status === 'LATE').length;
     const baseSalary = 12000000;
     const wfhIncentiveTotal = totalHadir * 50000;
     const lateDeductionTotal = totalTerlambat * 25000;
@@ -146,7 +146,6 @@ export class AuditLogServiceController {
     });
 
     if (logs.length === 0) {
-      // Return initial realistic audit logs if database empty
       const initialLogs = [
         {
           id: 'log-001',
