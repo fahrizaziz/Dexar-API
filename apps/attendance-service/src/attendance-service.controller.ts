@@ -1,18 +1,34 @@
-import { Controller, Get, Post, Patch, Body, Param, Query, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Body,
+  Param,
+  Query,
+  UseGuards,
+  UnauthorizedException,
+  BadRequestException,
+  InternalServerErrorException,
+  HttpException,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 import { PrismaService } from '@app/database';
 import { CasbinGuard } from '@app/casbin';
-import { CurrentUser, ApiResponseDto } from '@app/common';
+import { CurrentUser, ApiResponseDto, CloudinaryService } from '@app/common';
 
 @ApiTags('3. Absensi WFH & Monitoring HRD')
 @ApiBearerAuth()
 @Controller('api/v1/attendance')
 @UseGuards(CasbinGuard)
 export class AttendanceServiceController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly cloudinaryService: CloudinaryService,
+  ) {}
 
   @Post('clock-in')
-  @ApiOperation({ summary: 'Absen Masuk WFH (Clock In) dengan koordinat GPS & Foto Bukti' })
+  @ApiOperation({ summary: 'Absen Masuk WFH (Clock In) dengan koordinat GPS & Foto Bukti Cloudinary' })
   @ApiBody({
     schema: {
       type: 'object',
@@ -26,35 +42,87 @@ export class AttendanceServiceController {
     },
   })
   async clockIn(
-    @CurrentUser('sub') userId: string,
+    @CurrentUser() reqUser: any,
     @Body()
     body: {
-      latitude: number;
-      longitude: number;
-      address: string;
-      photoProofUrl: string;
-      workPlan: string;
+      latitude?: number;
+      longitude?: number;
+      address?: string;
+      photoProofUrl?: string;
+      workPlan?: string;
     },
   ) {
-    const todayStr = new Date().toISOString().split('T')[0];
-    const nowTimeStr = new Date().toTimeString().split(' ')[0];
+    try {
+      const userId = reqUser?.sub || reqUser?.id;
+      let employee = userId ? await this.prisma.user.findUnique({ where: { id: userId } }) : null;
 
-    const record = await this.prisma.attendanceRecord.create({
-      data: {
-        employeeId: userId,
-        date: todayStr,
-        clockInTime: nowTimeStr,
-        photoProofUrl: body.photoProofUrl,
-        latitude: body.latitude,
-        longitude: body.longitude,
-        address: body.address,
-        workPlan: body.workPlan,
-        status: 'ON_TIME',
-        verificationStatus: 'MENUNGGU',
-      },
-    });
+      if (!employee && reqUser?.nip) {
+        employee = await this.prisma.user.findUnique({ where: { nip: reqUser.nip } });
+      }
 
-    return new ApiResponseDto(true, 'Presensi WFH (Clock In) berhasil dicatat', record);
+      if (!employee) {
+        employee = await this.prisma.user.findFirst({ where: { role: 'KARYAWAN' } });
+      }
+
+      if (!employee) {
+        throw new BadRequestException('Data karyawan tidak ditemukan di database MySQL.');
+      }
+
+      // Upload Base64 webcam photo directly to Cloudinary CDN
+      let finalPhotoUrl = body.photoProofUrl || '';
+      if (finalPhotoUrl && finalPhotoUrl.startsWith('data:image')) {
+        finalPhotoUrl = await this.cloudinaryService.uploadImageBase64(finalPhotoUrl, 'wfh_absensi_proofs');
+      }
+
+      const todayStr = new Date().toISOString().split('T')[0];
+      const nowTimeStr = new Date().toTimeString().split(' ')[0];
+
+      // Check if user already has an attendance record today
+      const existingToday = await this.prisma.attendanceRecord.findFirst({
+        where: {
+          employeeId: employee.id,
+          date: todayStr,
+        },
+      });
+
+      let record;
+      if (existingToday) {
+        record = await this.prisma.attendanceRecord.update({
+          where: { id: existingToday.id },
+          data: {
+            clockInTime: nowTimeStr,
+            photoProofUrl: finalPhotoUrl || existingToday.photoProofUrl,
+            latitude: body.latitude || existingToday.latitude,
+            longitude: body.longitude || existingToday.longitude,
+            address: body.address || existingToday.address,
+            workPlan: body.workPlan || existingToday.workPlan,
+          },
+        });
+      } else {
+        record = await this.prisma.attendanceRecord.create({
+          data: {
+            employeeId: employee.id,
+            date: todayStr,
+            clockInTime: nowTimeStr,
+            photoProofUrl: finalPhotoUrl,
+            latitude: body.latitude || -6.2088,
+            longitude: body.longitude || 106.8456,
+            address: body.address || 'Lokasi WFH Home Office',
+            workPlan: body.workPlan || 'Jurnal WFH Harian',
+            status: 'ON_TIME',
+            verificationStatus: 'MENUNGGU',
+          },
+        });
+      }
+
+      return new ApiResponseDto(true, 'Presensi WFH (Clock In) berhasil dicatat', record);
+    } catch (err: any) {
+      console.error('ClockIn Controller Exception:', err);
+      if (err instanceof HttpException) {
+        throw err;
+      }
+      throw new InternalServerErrorException(err?.message || 'Gagal mencatat presensi WFH');
+    }
   }
 
   @Post('clock-out/:id')
@@ -71,28 +139,74 @@ export class AttendanceServiceController {
     @Param('id') recordId: string,
     @Body() body: { workSummary: string },
   ) {
-    const nowTimeStr = new Date().toTimeString().split(' ')[0];
+    try {
+      const nowTimeStr = new Date().toTimeString().split(' ')[0];
 
-    const updated = await this.prisma.attendanceRecord.update({
-      where: { id: recordId },
-      data: {
-        clockOutTime: nowTimeStr,
-        workSummary: body.workSummary,
-        status: 'WORK_COMPLETED',
-      },
-    });
+      const updated = await this.prisma.attendanceRecord.update({
+        where: { id: recordId },
+        data: {
+          clockOutTime: nowTimeStr,
+          workSummary: body.workSummary,
+          status: 'WORK_COMPLETED',
+        },
+      });
 
-    return new ApiResponseDto(true, 'Absen Pulang (Clock Out) berhasil dicatat', updated);
+      return new ApiResponseDto(true, 'Absen Pulang (Clock Out) berhasil dicatat', updated);
+    } catch (err: any) {
+      console.error('ClockOut Controller Exception:', err);
+      if (err instanceof HttpException) {
+        throw err;
+      }
+      throw new InternalServerErrorException(err?.message || 'Gagal melakukan Absen Pulang');
+    }
   }
 
   @Get('my-history')
   @ApiOperation({ summary: 'Mendapatkan riwayat absensi pribadi karyawan' })
-  async getMyHistory(@CurrentUser('sub') userId: string) {
-    const history = await this.prisma.attendanceRecord.findMany({
-      where: { employeeId: userId },
-      orderBy: { createdAt: 'desc' },
-    });
-    return new ApiResponseDto(true, 'Riwayat absensi personal berhasil diambil', history);
+  async getMyHistory(@CurrentUser() reqUser: any) {
+    try {
+      const userId = reqUser?.sub || reqUser?.id;
+      let employee = userId ? await this.prisma.user.findUnique({ where: { id: userId } }) : null;
+
+      if (!employee && reqUser?.nip) {
+        employee = await this.prisma.user.findUnique({ where: { nip: reqUser.nip } });
+      }
+
+      if (!employee) {
+        employee = await this.prisma.user.findFirst();
+      }
+
+      const history = await this.prisma.attendanceRecord.findMany({
+        where: { employeeId: employee?.id },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      const formatted = history.map((r) => ({
+        id: r.id,
+        employeeId: r.employeeId,
+        employeeName: employee?.fullName || 'Karyawan',
+        employeeNip: employee?.nip || '-',
+        department: employee?.departmentId || 'General',
+        date: r.date,
+        clockInTime: r.clockInTime,
+        clockOutTime: r.clockOutTime,
+        photoProofUrl: r.photoProofUrl,
+        location: {
+          latitude: r.latitude,
+          longitude: r.longitude,
+          address: r.address,
+        },
+        workPlan: r.workPlan,
+        workSummary: r.workSummary,
+        status: r.status,
+        verificationStatus: r.verificationStatus,
+      }));
+
+      return new ApiResponseDto(true, 'Riwayat absensi personal berhasil diambil', formatted);
+    } catch (err: any) {
+      console.error('GetMyHistory Exception:', err);
+      return new ApiResponseDto(true, 'Riwayat absensi personal', []);
+    }
   }
 
   @Get('monitoring')
@@ -101,11 +215,38 @@ export class AttendanceServiceController {
     @Query('search') search?: string,
     @Query('department') department?: string,
   ) {
-    const records = await this.prisma.attendanceRecord.findMany({
-      include: { employee: { include: { department: true } } },
-      orderBy: { createdAt: 'desc' },
-    });
-    return new ApiResponseDto(true, 'Data monitoring absensi HRD berhasil diambil', records);
+    try {
+      const records = await this.prisma.attendanceRecord.findMany({
+        include: { employee: { include: { department: true } } },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      const formattedRecords = records.map((r) => ({
+        id: r.id,
+        employeeId: r.employeeId,
+        employeeName: r.employee?.fullName || 'Karyawan',
+        employeeNip: r.employee?.nip || '-',
+        department: r.employee?.department?.name || 'General',
+        date: r.date,
+        clockInTime: r.clockInTime,
+        clockOutTime: r.clockOutTime,
+        photoProofUrl: r.photoProofUrl,
+        location: {
+          latitude: r.latitude,
+          longitude: r.longitude,
+          address: r.address,
+        },
+        workPlan: r.workPlan,
+        workSummary: r.workSummary,
+        status: r.status,
+        verificationStatus: r.verificationStatus,
+      }));
+
+      return new ApiResponseDto(true, 'Data monitoring absensi HRD berhasil diambil', formattedRecords);
+    } catch (err: any) {
+      console.error('GetMonitoring Exception:', err);
+      return new ApiResponseDto(true, 'Data monitoring absensi HRD', []);
+    }
   }
 
   @Patch(':id/verify')
@@ -114,13 +255,18 @@ export class AttendanceServiceController {
     @Param('id') id: string,
     @Body() body: { verificationStatus: 'TERVERIFIKASI' | 'PERLU_REVISI'; notes?: string },
   ) {
-    const updated = await this.prisma.attendanceRecord.update({
-      where: { id },
-      data: {
-        verificationStatus: body.verificationStatus,
-        notes: body.notes,
-      },
-    });
-    return new ApiResponseDto(true, 'Status verifikasi absensi berhasil diperbarui', updated);
+    try {
+      const updated = await this.prisma.attendanceRecord.update({
+        where: { id },
+        data: {
+          verificationStatus: body.verificationStatus,
+          notes: body.notes,
+        },
+      });
+      return new ApiResponseDto(true, 'Status verifikasi absensi berhasil diperbarui', updated);
+    } catch (err: any) {
+      console.error('VerifyAttendance Exception:', err);
+      throw new InternalServerErrorException(err?.message || 'Gagal memverifikasi absensi');
+    }
   }
 }

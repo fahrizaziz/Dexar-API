@@ -11,6 +11,7 @@ import { LeaveServiceController } from '../../leave-service/src/leave-service.co
 import { PayrollServiceController } from '../../payroll-service/src/payroll-service.controller';
 import { DatabaseModule } from '@app/database';
 import { CasbinModule } from '@app/casbin';
+import { CloudinaryService } from '@app/common';
 
 @Module({
   imports: [
@@ -31,6 +32,6 @@ import { CasbinModule } from '@app/casbin';
     LeaveServiceController,
     PayrollServiceController,
   ],
-  providers: [AuthServiceService],
+  providers: [AuthServiceService, CloudinaryService],
 })
 export class ApiGatewayModule {}
