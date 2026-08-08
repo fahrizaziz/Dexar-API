@@ -61,7 +61,7 @@ model User {
   role                    Role               @default(KARYAWAN)
   status                  String             @default("AKTIF")
   joinDate                DateTime           @default(now())
-  avatarUrl               String?            @db.Text
+  avatarUrl               String?            @db.LongText
   wfhAllowanceDaysPerWeek Int                @default(3)
   createdAt               DateTime           @default(now())
   updatedAt               DateTime           @updatedAt
@@ -109,7 +109,7 @@ model AttendanceRecord {
   date               String             // YYYY-MM-DD
   clockInTime        String             // HH:mm:ss
   clockOutTime       String?            // HH:mm:ss
-  photoProofUrl      String             @db.Text
+  photoProofUrl      String             @db.LongText
   latitude           Float
   longitude          Float
   address            String             @db.Text
