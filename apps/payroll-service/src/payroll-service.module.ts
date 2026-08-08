@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { PayrollServiceController } from './payroll-service.controller';
+import { PayrollServiceController, AuditLogServiceController } from './payroll-service.controller';
 import { DatabaseModule } from '@app/database';
 import { CasbinModule } from '@app/casbin';
 
@@ -10,6 +10,6 @@ import { CasbinModule } from '@app/casbin';
     DatabaseModule,
     CasbinModule,
   ],
-  controllers: [PayrollServiceController],
+  controllers: [PayrollServiceController, AuditLogServiceController],
 })
 export class PayrollServiceModule {}
