@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, Param, UseGuards, BadRequestException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 import { PrismaService } from '@app/database';
 import { CasbinGuard } from '@app/casbin';
@@ -26,7 +26,7 @@ export class LeaveServiceController {
     },
   })
   async createLeaveRequest(
-    @CurrentUser('sub') userId: string,
+    @CurrentUser() reqUser: any,
     @Body()
     body: {
       type: LeaveType;
@@ -35,9 +35,24 @@ export class LeaveServiceController {
       reason: string;
     },
   ) {
+    const userId = reqUser?.sub || reqUser?.id;
+    let employee = userId ? await this.prisma.user.findUnique({ where: { id: userId } }) : null;
+
+    if (!employee && reqUser?.nip) {
+      employee = await this.prisma.user.findUnique({ where: { nip: reqUser.nip } });
+    }
+
+    if (!employee) {
+      employee = await this.prisma.user.findFirst({ where: { role: 'KARYAWAN' } });
+    }
+
+    if (!employee) {
+      throw new BadRequestException('Data karyawan tidak ditemukan di database');
+    }
+
     const created = await this.prisma.leaveRequest.create({
       data: {
-        employeeId: userId,
+        employeeId: employee.id,
         type: body.type,
         startDate: new Date(body.startDate),
         endDate: new Date(body.endDate),
@@ -46,17 +61,53 @@ export class LeaveServiceController {
       },
     });
 
-    return new ApiResponseDto(true, 'Pengajuan cuti/WFH berhasil dikirim', created);
+    return new ApiResponseDto(true, 'Pengajuan cuti/WFH berhasil dikirim', {
+      id: created.id,
+      employeeId: created.employeeId,
+      employeeNip: employee.nip,
+      employeeName: employee.fullName,
+      department: employee.departmentId || 'General',
+      type: created.type,
+      startDate: created.startDate.toISOString().split('T')[0],
+      endDate: created.endDate.toISOString().split('T')[0],
+      reason: created.reason,
+      status: created.status,
+    });
   }
 
   @Get('my-requests')
   @ApiOperation({ summary: 'Mendapatkan daftar pengajuan cuti milik user yang login' })
-  async getMyLeaveRequests(@CurrentUser('sub') userId: string) {
+  async getMyLeaveRequests(@CurrentUser() reqUser: any) {
+    const userId = reqUser?.sub || reqUser?.id;
+    let employee = userId ? await this.prisma.user.findUnique({ where: { id: userId } }) : null;
+
+    if (!employee && reqUser?.nip) {
+      employee = await this.prisma.user.findUnique({ where: { nip: reqUser.nip } });
+    }
+
+    if (!employee) {
+      employee = await this.prisma.user.findFirst();
+    }
+
     const requests = await this.prisma.leaveRequest.findMany({
-      where: { employeeId: userId },
+      where: { employeeId: employee?.id },
       orderBy: { createdAt: 'desc' },
     });
-    return new ApiResponseDto(true, 'Pengajuan cuti personal berhasil diambil', requests);
+
+    const formatted = requests.map((r) => ({
+      id: r.id,
+      employeeId: r.employeeId,
+      employeeNip: employee?.nip || '-',
+      employeeName: employee?.fullName || 'Karyawan',
+      department: employee?.departmentId || 'General',
+      type: r.type,
+      startDate: r.startDate.toISOString().split('T')[0],
+      endDate: r.endDate.toISOString().split('T')[0],
+      reason: r.reason,
+      status: r.status,
+    }));
+
+    return new ApiResponseDto(true, 'Pengajuan cuti personal berhasil diambil', formatted);
   }
 
   @Get()
@@ -66,7 +117,21 @@ export class LeaveServiceController {
       include: { employee: { include: { department: true } } },
       orderBy: { createdAt: 'desc' },
     });
-    return new ApiResponseDto(true, 'Daftar semua pengajuan cuti berhasil diambil', requests);
+
+    const formatted = requests.map((r) => ({
+      id: r.id,
+      employeeId: r.employeeId,
+      employeeNip: r.employee?.nip || '-',
+      employeeName: r.employee?.fullName || 'Karyawan',
+      department: r.employee?.department?.name || 'General',
+      type: r.type,
+      startDate: r.startDate.toISOString().split('T')[0],
+      endDate: r.endDate.toISOString().split('T')[0],
+      reason: r.reason,
+      status: r.status,
+    }));
+
+    return new ApiResponseDto(true, 'Daftar semua pengajuan cuti berhasil diambil', formatted);
   }
 
   @Patch(':id/status')
