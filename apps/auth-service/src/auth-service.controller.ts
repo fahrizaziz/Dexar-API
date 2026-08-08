@@ -10,18 +10,19 @@ export class AuthServiceController {
 
   @Public()
   @Post('login')
-  @ApiOperation({ summary: 'Login pengguna (Email + Password) -> Mengembalikan JWT Access Token' })
+  @ApiOperation({ summary: 'Login pengguna (NIP / Email + Password) -> Mengembalikan JWT Access Token' })
   @ApiBody({
     schema: {
       type: 'object',
       properties: {
-        email: { type: 'string', example: 'budi.santoso@company.co.id' },
+        nip: { type: 'string', example: 'EMP-2026-001' },
         password: { type: 'string', example: 'password123' },
       },
     },
   })
-  async login(@Body() body: { email: string; password: string }) {
-    const data = await this.authService.login(body.email, body.password);
+  async login(@Body() body: { nip?: string; email?: string; identifier?: string; password: string }) {
+    const identifier = body.nip || body.identifier || body.email || '';
+    const data = await this.authService.login(identifier, body.password);
     return new ApiResponseDto(true, 'Login berhasil', data);
   }
 
