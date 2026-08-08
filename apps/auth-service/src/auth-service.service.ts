@@ -10,19 +10,28 @@ export class AuthServiceService {
     private readonly jwtService: JwtService,
   ) {}
 
-  async login(email: string, pass: string) {
-    const user = await this.prisma.user.findUnique({
-      where: { email },
+  async login(identifier: string, pass: string) {
+    if (!identifier) {
+      throw new UnauthorizedException('NIP atau password wajib diisi');
+    }
+
+    const user = await this.prisma.user.findFirst({
+      where: {
+        OR: [
+          { nip: identifier },
+          { email: identifier },
+        ],
+      },
       include: { department: true, position: true },
     });
 
     if (!user) {
-      throw new UnauthorizedException('Email atau password salah');
+      throw new UnauthorizedException('NIP atau password salah');
     }
 
     const isMatch = await bcrypt.compare(pass, user.password);
     if (!isMatch) {
-      throw new UnauthorizedException('Email atau password salah');
+      throw new UnauthorizedException('NIP atau password salah');
     }
 
     const payload = {
