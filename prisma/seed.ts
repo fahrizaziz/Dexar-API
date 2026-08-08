@@ -4,88 +4,47 @@ import * as bcrypt from 'bcrypt';
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('🌱 Seeding initial data for WFH Attendance System & Casbin RBAC...');
+  console.log('🧹 Cleaning database and seeding ONLY 1 HRD Admin user...');
 
-  // 1. Seed Departments
-  const deptEngineering = await prisma.department.upsert({
-    where: { code: 'ENG' },
-    update: {},
-    create: {
-      code: 'ENG',
-      name: 'Engineering & Tech',
-      headOfDepartment: 'Budi Santoso',
-      description: 'Divisi Rekayasa Perangkat Lunak dan Teknologi Informasi',
-      status: 'AKTIF',
-    },
-  });
+  // Delete all existing attendance records, leave requests, audit logs, users, positions, departments
+  await prisma.attendanceRecord.deleteMany({});
+  await prisma.leaveRequest.deleteMany({});
+  await prisma.auditLog.deleteMany({});
+  await prisma.user.deleteMany({});
+  await prisma.position.deleteMany({});
+  await prisma.department.deleteMany({});
 
-  const deptHR = await prisma.department.upsert({
-    where: { code: 'HRD' },
-    update: {},
-    create: {
-      code: 'HRD',
-      name: 'Human Resources',
+  // 1. Seed HR Department & Position
+  const deptHR = await prisma.department.create({
+    data: {
+      code: 'HRD-001',
+      name: 'Human Resources & General Affairs',
       headOfDepartment: 'Siti Rahmawati',
       description: 'Divisi Manajemen Sumber Daya Manusia dan Talenta',
       status: 'AKTIF',
     },
   });
 
-  // 2. Seed Positions
-  const posSeniorDev = await prisma.position.upsert({
-    where: { code: 'POS-ENG-01' },
-    update: {},
-    create: {
-      code: 'POS-ENG-01',
-      name: 'Senior Frontend Engineer',
-      departmentId: deptEngineering.id,
-      level: 'Senior',
-      status: 'AKTIF',
-    },
-  });
-
-  const posHRManager = await prisma.position.upsert({
-    where: { code: 'POS-HR-01' },
-    update: {},
-    create: {
-      code: 'POS-HR-01',
-      name: 'HR Manager',
+  const posHRManager = await prisma.position.create({
+    data: {
+      code: 'POS-001',
+      name: 'HR Manager & System Admin',
       departmentId: deptHR.id,
       level: 'Manager',
       status: 'AKTIF',
     },
   });
 
-  // 3. Seed Users
+  // 2. Seed ONLY 1 HRD Admin User (Siti Rahmawati)
   const hashedPassword = await bcrypt.hash('password123', 10);
 
-  const empBudi = await prisma.user.upsert({
-    where: { email: 'budi.santoso@company.co.id' },
-    update: {},
-    create: {
+  const empSiti = await prisma.user.create({
+    data: {
       nip: 'EMP-2026-001',
-      fullName: 'Budi Santoso',
-      email: 'budi.santoso@company.co.id',
-      password: hashedPassword,
-      phone: '081234567890',
-      departmentId: deptEngineering.id,
-      positionId: posSeniorDev.id,
-      role: Role.KARYAWAN,
-      status: 'AKTIF',
-      wfhAllowanceDaysPerWeek: 3,
-      avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=250',
-    },
-  });
-
-  const empSiti = await prisma.user.upsert({
-    where: { email: 'siti.rahmawati@company.co.id' },
-    update: {},
-    create: {
-      nip: 'EMP-2026-002',
       fullName: 'Siti Rahmawati',
       email: 'siti.rahmawati@company.co.id',
       password: hashedPassword,
-      phone: '081987654321',
+      phone: '0819-8765-4321',
       departmentId: deptHR.id,
       positionId: posHRManager.id,
       role: Role.HRD_ADMIN,
@@ -95,7 +54,7 @@ async function main() {
     },
   });
 
-  // 4. Seed Casbin Rules
+  // 3. Seed Casbin Rules
   const initialPolicies = [
     // Policies for KARYAWAN
     { ptype: 'p', v0: 'KARYAWAN', v1: '/api/v1/attendance/clock-in', v2: 'POST' },
@@ -127,9 +86,20 @@ async function main() {
   await prisma.casbinRule.deleteMany();
   await prisma.casbinRule.createMany({ data: initialPolicies });
 
-  console.log('✅ Seed success! Default users & Casbin RBAC policies created.');
-  console.log('  - Employee User: budi.santoso@company.co.id (Password: password123)');
-  console.log('  - HRD Admin User: siti.rahmawati@company.co.id (Password: password123)');
+  // 4. Initial Audit Log
+  await prisma.auditLog.create({
+    data: {
+      actorNip: empSiti.nip,
+      actorName: empSiti.fullName,
+      actorRole: Role.HRD_ADMIN,
+      action: 'SYSTEM_INITIALIZATION',
+      category: 'SYSTEM',
+      details: 'Pembersihan database sistem & inisialisasi akun tunggal Admin HRD Utama (Siti Rahmawati).',
+    },
+  });
+
+  console.log('✅ Clean seed success! Database wiped. ONLY 1 HRD Admin created:');
+  console.log('  - HRD Admin User: siti.rahmawati@company.co.id (NIP: EMP-2026-001 / Password: password123)');
 }
 
 main()
