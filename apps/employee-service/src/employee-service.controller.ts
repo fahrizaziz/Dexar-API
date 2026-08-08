@@ -48,15 +48,15 @@ export class EmployeeServiceController {
       email: emp.email,
       role: emp.role,
       department: emp.department?.name || 'Engineering & Tech',
-      position: emp.position?.title || 'Senior Software Engineer',
+      position: emp.position?.name || 'Senior Software Engineer',
       avatarUrl:
         emp.avatarUrl ||
         `https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200`,
       phone: emp.phone || '0812-3456-7890',
       joinDate: emp.joinDate ? emp.joinDate.toISOString().split('T')[0] : '2025-01-15',
-      status: emp.status || 'ACTIVE',
+      status: emp.status || 'AKTIF',
       wfhAllowanceDaysPerWeek: emp.wfhAllowanceDaysPerWeek || 3,
-      salary: emp.salary || 12000000,
+      salary: 12000000,
     }));
 
     return new ApiResponseDto(true, 'Data karyawan berhasil diambil', formatted);
@@ -84,11 +84,11 @@ export class EmployeeServiceController {
     const hashedPassword = await bcrypt.hash(body.password || 'password123', 10);
 
     // Find default department & position
-    const dept = await this.prisma.departmentMaster.findFirst({
+    const dept = await this.prisma.department.findFirst({
       where: { name: { contains: body.department || 'Engineering' } },
     });
-    const pos = await this.prisma.positionMaster.findFirst({
-      where: { title: { contains: body.position || 'Engineer' } },
+    const pos = await this.prisma.position.findFirst({
+      where: { name: { contains: body.position || 'Engineer' } },
     });
 
     const created = await this.prisma.user.create({
@@ -97,15 +97,14 @@ export class EmployeeServiceController {
         fullName: body.fullName,
         email: body.email,
         password: hashedPassword,
-        role: body.role || 'KARYAWAN',
+        role: body.role === 'HRD' ? 'HRD_ADMIN' : 'KARYAWAN',
         phone: body.phone || '0812-3456-7890',
         avatarUrl:
           body.avatarUrl ||
           `https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200`,
         joinDate: body.joinDate ? new Date(body.joinDate) : new Date(),
-        status: body.status || 'ACTIVE',
+        status: body.status || 'AKTIF',
         wfhAllowanceDaysPerWeek: body.wfhAllowanceDaysPerWeek || 3,
-        salary: body.salary ? Number(body.salary) : 12000000,
         departmentId: dept?.id,
         positionId: pos?.id,
       },
@@ -119,13 +118,13 @@ export class EmployeeServiceController {
       email: created.email,
       role: created.role,
       department: created.department?.name || body.department || 'Engineering & Tech',
-      position: created.position?.title || body.position || 'Senior Software Engineer',
+      position: created.position?.name || body.position || 'Senior Software Engineer',
       avatarUrl: created.avatarUrl,
       phone: created.phone,
       joinDate: created.joinDate ? created.joinDate.toISOString().split('T')[0] : '2026-08-08',
       status: created.status,
       wfhAllowanceDaysPerWeek: created.wfhAllowanceDaysPerWeek,
-      salary: created.salary,
+      salary: body.salary ? Number(body.salary) : 12000000,
     });
   }
 
@@ -137,9 +136,8 @@ export class EmployeeServiceController {
     if (body.email) dataToUpdate.email = body.email;
     if (body.phone) dataToUpdate.phone = body.phone;
     if (body.status) dataToUpdate.status = body.status;
-    if (body.role) dataToUpdate.role = body.role;
+    if (body.role) dataToUpdate.role = body.role === 'HRD' ? 'HRD_ADMIN' : 'KARYAWAN';
     if (body.wfhAllowanceDaysPerWeek) dataToUpdate.wfhAllowanceDaysPerWeek = Number(body.wfhAllowanceDaysPerWeek);
-    if (body.salary) dataToUpdate.salary = Number(body.salary);
     if (body.password) dataToUpdate.password = await bcrypt.hash(body.password, 10);
 
     const updated = await this.prisma.user.update({
@@ -155,13 +153,13 @@ export class EmployeeServiceController {
       email: updated.email,
       role: updated.role,
       department: updated.department?.name || 'Engineering & Tech',
-      position: updated.position?.title || 'Software Engineer',
+      position: updated.position?.name || 'Software Engineer',
       avatarUrl: updated.avatarUrl,
       phone: updated.phone,
       joinDate: updated.joinDate ? updated.joinDate.toISOString().split('T')[0] : '2026-08-08',
       status: updated.status,
       wfhAllowanceDaysPerWeek: updated.wfhAllowanceDaysPerWeek,
-      salary: updated.salary,
+      salary: body.salary ? Number(body.salary) : 12000000,
     });
   }
 
