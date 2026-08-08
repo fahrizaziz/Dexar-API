@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { AttendanceServiceController } from './attendance-service.controller';
 import { DatabaseModule } from '@app/database';
 import { CasbinModule } from '@app/casbin';
+import { CloudinaryService } from '@app/common';
 
 @Module({
   imports: [
@@ -11,5 +12,6 @@ import { CasbinModule } from '@app/casbin';
     CasbinModule,
   ],
   controllers: [AttendanceServiceController],
+  providers: [CloudinaryService],
 })
 export class AttendanceServiceModule {}

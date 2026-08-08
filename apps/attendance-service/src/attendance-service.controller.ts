@@ -15,17 +15,20 @@ import {
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 import { PrismaService } from '@app/database';
 import { CasbinGuard } from '@app/casbin';
-import { CurrentUser, ApiResponseDto } from '@app/common';
+import { CurrentUser, ApiResponseDto, CloudinaryService } from '@app/common';
 
 @ApiTags('3. Absensi WFH & Monitoring HRD')
 @ApiBearerAuth()
 @Controller('api/v1/attendance')
 @UseGuards(CasbinGuard)
 export class AttendanceServiceController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly cloudinaryService: CloudinaryService,
+  ) {}
 
   @Post('clock-in')
-  @ApiOperation({ summary: 'Absen Masuk WFH (Clock In) dengan koordinat GPS & Foto Bukti' })
+  @ApiOperation({ summary: 'Absen Masuk WFH (Clock In) dengan koordinat GPS & Foto Bukti Cloudinary' })
   @ApiBody({
     schema: {
       type: 'object',
@@ -65,6 +68,12 @@ export class AttendanceServiceController {
         throw new BadRequestException('Data karyawan tidak ditemukan di database MySQL.');
       }
 
+      // Upload Base64 webcam photo directly to Cloudinary CDN
+      let finalPhotoUrl = body.photoProofUrl || '';
+      if (finalPhotoUrl && finalPhotoUrl.startsWith('data:image')) {
+        finalPhotoUrl = await this.cloudinaryService.uploadImageBase64(finalPhotoUrl, 'wfh_absensi_proofs');
+      }
+
       const todayStr = new Date().toISOString().split('T')[0];
       const nowTimeStr = new Date().toTimeString().split(' ')[0];
 
@@ -82,7 +91,7 @@ export class AttendanceServiceController {
           where: { id: existingToday.id },
           data: {
             clockInTime: nowTimeStr,
-            photoProofUrl: body.photoProofUrl || existingToday.photoProofUrl,
+            photoProofUrl: finalPhotoUrl || existingToday.photoProofUrl,
             latitude: body.latitude || existingToday.latitude,
             longitude: body.longitude || existingToday.longitude,
             address: body.address || existingToday.address,
@@ -95,7 +104,7 @@ export class AttendanceServiceController {
             employeeId: employee.id,
             date: todayStr,
             clockInTime: nowTimeStr,
-            photoProofUrl: body.photoProofUrl || '',
+            photoProofUrl: finalPhotoUrl,
             latitude: body.latitude || -6.2088,
             longitude: body.longitude || 106.8456,
             address: body.address || 'Lokasi WFH Home Office',
