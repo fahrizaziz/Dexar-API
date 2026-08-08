@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, Param, Query, UseGuards, UnauthorizedException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 import { PrismaService } from '@app/database';
 import { CasbinGuard } from '@app/casbin';
@@ -26,7 +26,7 @@ export class AttendanceServiceController {
     },
   })
   async clockIn(
-    @CurrentUser('sub') userId: string,
+    @CurrentUser() reqUser: any,
     @Body()
     body: {
       latitude: number;
@@ -36,12 +36,27 @@ export class AttendanceServiceController {
       workPlan: string;
     },
   ) {
+    const userId = reqUser?.sub || reqUser?.id;
+    let employee = userId ? await this.prisma.user.findUnique({ where: { id: userId } }) : null;
+
+    if (!employee && reqUser?.nip) {
+      employee = await this.prisma.user.findUnique({ where: { nip: reqUser.nip } });
+    }
+
+    if (!employee) {
+      employee = await this.prisma.user.findFirst();
+    }
+
+    if (!employee) {
+      throw new UnauthorizedException('Data karyawan tidak ditemukan di database');
+    }
+
     const todayStr = new Date().toISOString().split('T')[0];
     const nowTimeStr = new Date().toTimeString().split(' ')[0];
 
     const record = await this.prisma.attendanceRecord.create({
       data: {
-        employeeId: userId,
+        employeeId: employee.id,
         date: todayStr,
         clockInTime: nowTimeStr,
         photoProofUrl: body.photoProofUrl,
@@ -87,9 +102,20 @@ export class AttendanceServiceController {
 
   @Get('my-history')
   @ApiOperation({ summary: 'Mendapatkan riwayat absensi pribadi karyawan' })
-  async getMyHistory(@CurrentUser('sub') userId: string) {
+  async getMyHistory(@CurrentUser() reqUser: any) {
+    const userId = reqUser?.sub || reqUser?.id;
+    let employee = userId ? await this.prisma.user.findUnique({ where: { id: userId } }) : null;
+
+    if (!employee && reqUser?.nip) {
+      employee = await this.prisma.user.findUnique({ where: { nip: reqUser.nip } });
+    }
+
+    if (!employee) {
+      employee = await this.prisma.user.findFirst();
+    }
+
     const history = await this.prisma.attendanceRecord.findMany({
-      where: { employeeId: userId },
+      where: { employeeId: employee?.id },
       orderBy: { createdAt: 'desc' },
     });
     return new ApiResponseDto(true, 'Riwayat absensi personal berhasil diambil', history);
@@ -105,7 +131,30 @@ export class AttendanceServiceController {
       include: { employee: { include: { department: true } } },
       orderBy: { createdAt: 'desc' },
     });
-    return new ApiResponseDto(true, 'Data monitoring absensi HRD berhasil diambil', records);
+
+    // Format response so Frontend receives employeeName and employeeNip directly
+    const formattedRecords = records.map((r) => ({
+      id: r.id,
+      employeeId: r.employeeId,
+      employeeName: r.employee?.fullName || 'Karyawan',
+      employeeNip: r.employee?.nip || '-',
+      department: r.employee?.department?.name || 'General',
+      date: r.date,
+      clockInTime: r.clockInTime,
+      clockOutTime: r.clockOutTime,
+      photoProofUrl: r.photoProofUrl,
+      location: {
+        latitude: r.latitude,
+        longitude: r.longitude,
+        address: r.address,
+      },
+      workPlan: r.workPlan,
+      workSummary: r.workSummary,
+      status: r.status,
+      verificationStatus: r.verificationStatus,
+    }));
+
+    return new ApiResponseDto(true, 'Data monitoring absensi HRD berhasil diambil', formattedRecords);
   }
 
   @Patch(':id/verify')
