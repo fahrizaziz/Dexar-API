@@ -4,15 +4,16 @@ import * as bcrypt from 'bcrypt';
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('🧹 Cleaning database and seeding ONLY 1 HRD Admin user (Audit Logs 100% Empty)...');
+  console.log('🧹 Cleaning database and seeding ONLY 1 HRD Admin user & Initial Geofence Config...');
 
-  // Delete all existing attendance records, leave requests, audit logs, users, positions, departments
+  // Delete all existing attendance records, leave requests, audit logs, users, positions, departments, geofence configs
   await prisma.attendanceRecord.deleteMany({});
   await prisma.leaveRequest.deleteMany({});
   await prisma.auditLog.deleteMany({});
   await prisma.user.deleteMany({});
   await prisma.position.deleteMany({});
   await prisma.department.deleteMany({});
+  await prisma.geofenceConfig.deleteMany({});
 
   // 1. Seed HR Department & Position
   const deptHR = await prisma.department.create({
@@ -54,7 +55,20 @@ async function main() {
     },
   });
 
-  // 3. Seed Casbin Rules
+  // 3. Seed Default Geofence Config
+  await prisma.geofenceConfig.create({
+    data: {
+      officeName: 'Kantor Pusat HQ Jakarta (South Quarter)',
+      latitude: -6.2915,
+      longitude: 106.7932,
+      radiusMeters: 150,
+      workStartTime: '08:30',
+      workEndTime: '17:30',
+      lateToleranceMinutes: 15,
+    },
+  });
+
+  // 4. Seed Casbin Rules
   const initialPolicies = [
     // Policies for KARYAWAN
     { ptype: 'p', v0: 'KARYAWAN', v1: '/api/v1/attendance/clock-in', v2: 'POST' },
@@ -86,7 +100,7 @@ async function main() {
   await prisma.casbinRule.deleteMany();
   await prisma.casbinRule.createMany({ data: initialPolicies });
 
-  console.log('✅ Clean seed success! Audit Logs 100% Empty. ONLY 1 HRD Admin created:');
+  console.log('✅ Clean seed success! Geofence Config & ONLY 1 HRD Admin created:');
   console.log('  - HRD Admin User: siti.rahmawati@company.co.id (NIP: EMP-2026-001 / Password: password123)');
 }
 
