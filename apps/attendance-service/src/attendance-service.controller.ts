@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Put,
   Patch,
   Body,
   Param,
@@ -267,6 +268,68 @@ export class AttendanceServiceController {
     } catch (err: any) {
       console.error('VerifyAttendance Exception:', err);
       throw new InternalServerErrorException(err?.message || 'Gagal memverifikasi absensi');
+    }
+  }
+}
+
+@ApiTags('Geofence Config')
+@Controller('api/v1/geofence')
+export class GeofenceServiceController {
+  constructor(private readonly prisma: PrismaService) {}
+
+  @Get()
+  @ApiOperation({ summary: 'Ambil konfigurasi geofence kantor aktif dari database MySQL' })
+  async getGeofenceConfig() {
+    try {
+      const config = await this.prisma.geofenceConfig.findFirst();
+      if (!config) {
+        return new ApiResponseDto(true, 'Geofence config default', {
+          officeName: 'Kantor Pusat HQ Jakarta (South Quarter)',
+          latitude: -6.2915,
+          longitude: 106.7932,
+          radiusMeters: 150,
+          workStartTime: '08:30',
+          workEndTime: '17:30',
+          lateToleranceMinutes: 15,
+        });
+      }
+      return new ApiResponseDto(true, 'Konfigurasi geofence berhasil diambil', config);
+    } catch (err: any) {
+      console.error('GetGeofence Exception:', err);
+      return new ApiResponseDto(false, 'Gagal mengambil geofence config', null);
+    }
+  }
+
+  @Put()
+  @ApiOperation({ summary: 'Update konfigurasi geofence kantor ke database MySQL' })
+  async updateGeofenceConfig(@Body() body: any) {
+    try {
+      const firstConfig = await this.prisma.geofenceConfig.findFirst();
+      let updated;
+      const dataToSave = {
+        officeName: body.officeName || 'Kantor Pusat HQ Jakarta (South Quarter)',
+        latitude: Number(body.latitude) || -6.2915,
+        longitude: Number(body.longitude) || 106.7932,
+        radiusMeters: Number(body.radiusMeters) || 150,
+        workStartTime: body.workStartTime || '08:30',
+        workEndTime: body.workEndTime || '17:30',
+        lateToleranceMinutes: Number(body.lateToleranceMinutes) || 15,
+      };
+
+      if (firstConfig) {
+        updated = await this.prisma.geofenceConfig.update({
+          where: { id: firstConfig.id },
+          data: dataToSave,
+        });
+      } else {
+        updated = await this.prisma.geofenceConfig.create({
+          data: dataToSave,
+        });
+      }
+      return new ApiResponseDto(true, 'Konfigurasi geofence berhasil diperbarui ke MySQL', updated);
+    } catch (err: any) {
+      console.error('UpdateGeofence Exception:', err);
+      throw new InternalServerErrorException(err?.message || 'Gagal memperbarui geofence config');
     }
   }
 }

@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { AttendanceServiceController } from './attendance-service.controller';
+import { AttendanceServiceController, GeofenceServiceController } from './attendance-service.controller';
 import { DatabaseModule } from '@app/database';
 import { CasbinModule } from '@app/casbin';
 import { CloudinaryService } from '@app/common';
@@ -11,7 +11,7 @@ import { CloudinaryService } from '@app/common';
     DatabaseModule,
     CasbinModule,
   ],
-  controllers: [AttendanceServiceController],
+  controllers: [AttendanceServiceController, GeofenceServiceController],
   providers: [CloudinaryService],
 })
 export class AttendanceServiceModule {}
