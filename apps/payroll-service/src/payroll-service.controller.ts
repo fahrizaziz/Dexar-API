@@ -146,49 +146,20 @@ export class AuditLogServiceController {
     });
 
     if (logs.length === 0) {
-      const initialLogs = [
-        {
-          id: 'log-001',
-          actorNip: 'EMP-2026-002',
-          actorName: 'Siti Rahmawati',
-          actorRole: 'HRD_ADMIN',
-          action: 'UPDATE_EMPLOYEE_MASTER',
-          category: 'KARYAWAN',
-          details: 'Memperbarui data master karyawan EMP-2026-007 (Yanto)',
-          timestamp: new Date().toISOString(),
-        },
-        {
-          id: 'log-002',
-          actorNip: 'EMP-2026-002',
-          actorName: 'Siti Rahmawati',
-          actorRole: 'HRD_ADMIN',
-          action: 'APPROVE_LEAVE_REQUEST',
-          category: 'LEAVE',
-          details: 'Menyetujui permohonan Cuti Tahunan Budi Santoso (EMP-2026-001)',
-          timestamp: new Date(Date.now() - 3600000).toISOString(),
-        },
-        {
-          id: 'log-003',
-          actorNip: 'EMP-2026-001',
-          actorName: 'Budi Santoso',
-          actorRole: 'KARYAWAN',
-          action: 'CLOCK_IN_WFH',
-          category: 'ATTENDANCE',
-          details: 'Melakukan Presensi Masuk WFH dengan Verifikasi Swafoto & Lokasi GPS',
-          timestamp: new Date(Date.now() - 7200000).toISOString(),
-        },
-        {
-          id: 'log-004',
-          actorNip: 'EMP-2026-002',
-          actorName: 'Siti Rahmawati',
-          actorRole: 'HRD_ADMIN',
-          action: 'CREATE_DEPARTMENT',
-          category: 'SYSTEM',
-          details: 'Menambahkan Master Departemen Baru: Engineering & Tech (DEPT-001)',
-          timestamp: new Date(Date.now() - 86400000).toISOString(),
-        },
-      ];
-      return new ApiResponseDto(true, 'Data audit log berhasil diambil', initialLogs);
+      await this.prisma.auditLog.createMany({
+        data: [
+          {
+            actorNip: 'EMP-2026-001',
+            actorName: 'Siti Rahmawati',
+            actorRole: 'HRD_ADMIN',
+            action: 'UPDATE_GEOFENCE_CONFIG',
+            category: 'SYSTEM',
+            details: 'Mengubah konfigurasi geofence lokasi Kantor Pusat HQ Jakarta (South Quarter) (Lat: -6.2915, Long: 106.7932, Radius: 150m).',
+          },
+        ],
+      });
+      const dbLogs = await this.prisma.auditLog.findMany({ orderBy: { timestamp: 'desc' } });
+      return new ApiResponseDto(true, 'Data audit log berhasil diambil', dbLogs);
     }
 
     return new ApiResponseDto(true, 'Data audit log berhasil diambil', logs);
@@ -203,7 +174,7 @@ export class AuditLogServiceController {
 
     const created = await this.prisma.auditLog.create({
       data: {
-        actorNip: body.actorNip || 'EMP-2026-002',
+        actorNip: body.actorNip || 'EMP-2026-001',
         actorName: body.actorName || 'Siti Rahmawati',
         actorRole: body.actorRole || 'HRD_ADMIN',
         action: body.action,
@@ -212,6 +183,6 @@ export class AuditLogServiceController {
       },
     });
 
-    return new ApiResponseDto(true, 'Audit log berhasil dicatat', created);
+    return new ApiResponseDto(true, 'Audit log berhasil dicatat ke MySQL', created);
   }
 }

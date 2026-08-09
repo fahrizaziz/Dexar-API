@@ -8,7 +8,7 @@ import { AuthServiceService } from '../../auth-service/src/auth-service.service'
 import { EmployeeServiceController } from '../../employee-service/src/employee-service.controller';
 import { AttendanceServiceController, GeofenceServiceController } from '../../attendance-service/src/attendance-service.controller';
 import { LeaveServiceController } from '../../leave-service/src/leave-service.controller';
-import { PayrollServiceController } from '../../payroll-service/src/payroll-service.controller';
+import { PayrollServiceController, AuditLogServiceController } from '../../payroll-service/src/payroll-service.controller';
 import { DatabaseModule } from '@app/database';
 import { CasbinModule } from '@app/casbin';
 import { CloudinaryService } from '@app/common';
@@ -32,6 +32,7 @@ import { CloudinaryService } from '@app/common';
     GeofenceServiceController,
     LeaveServiceController,
     PayrollServiceController,
+    AuditLogServiceController,
   ],
   providers: [AuthServiceService, CloudinaryService],
 })
