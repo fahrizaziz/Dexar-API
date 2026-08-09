@@ -4,7 +4,7 @@ import * as bcrypt from 'bcrypt';
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('🧹 Cleaning database and seeding ONLY 1 HRD Admin user...');
+  console.log('🧹 Cleaning database and seeding ONLY 1 HRD Admin user (Audit Logs 100% Empty)...');
 
   // Delete all existing attendance records, leave requests, audit logs, users, positions, departments
   await prisma.attendanceRecord.deleteMany({});
@@ -86,19 +86,7 @@ async function main() {
   await prisma.casbinRule.deleteMany();
   await prisma.casbinRule.createMany({ data: initialPolicies });
 
-  // 4. Initial Audit Log
-  await prisma.auditLog.create({
-    data: {
-      actorNip: empSiti.nip,
-      actorName: empSiti.fullName,
-      actorRole: Role.HRD_ADMIN,
-      action: 'SYSTEM_INITIALIZATION',
-      category: 'SYSTEM',
-      details: 'Pembersihan database sistem & inisialisasi akun tunggal Admin HRD Utama (Siti Rahmawati).',
-    },
-  });
-
-  console.log('✅ Clean seed success! Database wiped. ONLY 1 HRD Admin created:');
+  console.log('✅ Clean seed success! Audit Logs 100% Empty. ONLY 1 HRD Admin created:');
   console.log('  - HRD Admin User: siti.rahmawati@company.co.id (NIP: EMP-2026-001 / Password: password123)');
 }
 
